@@ -1,7 +1,17 @@
--- Ultimate Player Control UI 😎
+-- Ultimate Player Control UI v5 😎 (Animated Menu + Auto-Save)
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local DataStoreService = game:GetService("DataStoreService")
 local player = Players.LocalPlayer
+
+-- DataStore for settings
+local settingsStore = DataStoreService:GetDataStore("UltimateProUI_Settings")
+
+-- Default stats
+local DEFAULT_SPEED = 16
+local DEFAULT_JUMP = 50
+local DEFAULT_INFINITE_JUMP = false
 
 -- Wait for character
 local character = player.Character or player.CharacterAdded:Wait()
@@ -15,32 +25,36 @@ player.CharacterAdded:Connect(function(char)
 end)
 
 -- STATES
-local infiniteJumpEnabled = false
-local walkSpeed = humanoid.WalkSpeed
+local infiniteJumpEnabled = DEFAULT_INFINITE_JUMP
+local walkSpeed = DEFAULT_SPEED
+local jumpPower = DEFAULT_JUMP
+local searchText = ""
+local selectedPlayerBtn = nil
+local menuOpen = false
 
 -- GUI
 local gui = Instance.new("ScreenGui")
-gui.Parent = player.PlayerGui
+gui.Name = "UltimateProUIv5"
+gui.Parent = player:WaitForChild("PlayerGui")
 
--- Floating open button
-local openBtn = Instance.new("TextButton")
-openBtn.Size = UDim2.new(0,60,0,60)
-openBtn.Position = UDim2.new(0,20,0.7,0)
-openBtn.Text = "≡"
-openBtn.TextScaled = true
-openBtn.BackgroundColor3 = Color3.fromRGB(40,40,40)
-openBtn.TextColor3 = Color3.new(1,1,1)
-openBtn.Parent = gui
-openBtn.Active = true
-openBtn.Draggable = true
-Instance.new("UICorner",openBtn).CornerRadius = UDim.new(1,0)
+-- Floating handle
+local handleBtn = Instance.new("TextButton")
+handleBtn.Size = UDim2.new(0,40,0,40)
+handleBtn.Position = UDim2.new(0,10,0.7,0)
+handleBtn.Text = "≡"
+handleBtn.TextScaled = true
+handleBtn.BackgroundColor3 = Color3.fromRGB(50,50,50)
+handleBtn.TextColor3 = Color3.new(1,1,1)
+handleBtn.Parent = gui
+handleBtn.Active = true
+handleBtn.Draggable = true
+Instance.new("UICorner",handleBtn).CornerRadius = UDim.new(1,0)
 
--- Main frame
+-- Main frame (starts hidden offscreen)
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0,250,0,400)
-frame.Position = UDim2.new(0.5,-125,0.4,-200)
+frame.Size = UDim2.new(0,300,0,550)
+frame.Position = UDim2.new(-1,0,0.4,-275) -- start offscreen
 frame.BackgroundColor3 = Color3.fromRGB(35,35,35)
-frame.Visible = false
 frame.Parent = gui
 frame.Active = true
 frame.Draggable = true
@@ -50,13 +64,13 @@ Instance.new("UICorner",frame)
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1,0,0,30)
 title.BackgroundTransparency = 1
-title.Text = "Player Control UI"
+title.Text = "Ultimate Player Control UI"
 title.TextColor3 = Color3.new(1,1,1)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 16
 title.Parent = frame
 
--- Speed indicator
+-- Speed & Jump indicators
 local speedLabel = Instance.new("TextLabel")
 speedLabel.Size = UDim2.new(0.5,0,0,25)
 speedLabel.Position = UDim2.new(0.25,0,0,35)
@@ -67,7 +81,17 @@ speedLabel.Font = Enum.Font.Gotham
 speedLabel.TextSize = 14
 speedLabel.Parent = frame
 
--- Helper to create buttons
+local jumpLabel = Instance.new("TextLabel")
+jumpLabel.Size = UDim2.new(0.5,0,0,25)
+jumpLabel.Position = UDim2.new(0.25,0,0,60)
+jumpLabel.Text = "Jump Power: "..jumpPower
+jumpLabel.TextColor3 = Color3.fromRGB(255,255,255)
+jumpLabel.BackgroundTransparency = 1
+jumpLabel.Font = Enum.Font.Gotham
+jumpLabel.TextSize = 14
+jumpLabel.Parent = frame
+
+-- Helper for buttons
 local function createButton(name,posY)
 	local btn = Instance.new("TextButton")
 	btn.Size = UDim2.new(0.8,0,0,30)
@@ -81,12 +105,17 @@ local function createButton(name,posY)
 end
 
 -- Buttons
-local jumpBtn = createButton("Infinite Jump: OFF", 70)
-local increaseBtn = createButton("Increase Speed (+10)", 110)
-local decreaseBtn = createButton("Decrease Speed (-10)", 150)
+local jumpBtn = createButton("Infinite Jump: OFF", 90)
+local increaseSpeedBtn = createButton("Increase Speed (+10)", 130)
+local decreaseSpeedBtn = createButton("Decrease Speed (-10)", 170)
+local increaseJumpBtn = createButton("Increase Jump (+10)", 210)
+local decreaseJumpBtn = createButton("Decrease Jump (-10)", 250)
+local resetBtn = createButton("Reset All Stats", 290)
+
+-- Teleport section
 local teleportTitle = Instance.new("TextLabel")
 teleportTitle.Size = UDim2.new(0.8,0,0,20)
-teleportTitle.Position = UDim2.new(0.1,0,0,190)
+teleportTitle.Position = UDim2.new(0.1,0,0,330)
 teleportTitle.BackgroundTransparency = 1
 teleportTitle.Text = "Teleport to Player:"
 teleportTitle.TextColor3 = Color3.new(1,1,1)
@@ -94,84 +123,173 @@ teleportTitle.Font = Enum.Font.Gotham
 teleportTitle.TextSize = 14
 teleportTitle.Parent = frame
 
+-- Search box
+local searchBox = Instance.new("TextBox")
+searchBox.Size = UDim2.new(0.8,0,0,25)
+searchBox.Position = UDim2.new(0.1,0,0,350)
+searchBox.PlaceholderText = "Search Player..."
+searchBox.Text = ""
+searchBox.ClearTextOnFocus = false
+searchBox.TextColor3 = Color3.new(1,1,1)
+searchBox.BackgroundColor3 = Color3.fromRGB(60,60,60)
+searchBox.Parent = frame
+Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0,6)
+
 -- Player list container
 local playerListFrame = Instance.new("ScrollingFrame")
-playerListFrame.Size = UDim2.new(0.8,0,0,150)
-playerListFrame.Position = UDim2.new(0.1,0,0,210)
+playerListFrame.Size = UDim2.new(0.8,0,0,170)
+playerListFrame.Position = UDim2.new(0.1,0,0,380)
 playerListFrame.BackgroundTransparency = 1
 playerListFrame.CanvasSize = UDim2.new(0,0,0,0)
+playerListFrame.ScrollBarThickness = 6
 playerListFrame.Parent = frame
 
 local listLayout = Instance.new("UIListLayout")
 listLayout.Parent = playerListFrame
 listLayout.Padding = UDim.new(0,4)
 
--- FUNCTIONS
+-- Save & Load functions (same as v4)
+local function saveSettings()
+	pcall(function()
+		settingsStore:SetAsync(player.UserId, {
+			speed = walkSpeed,
+			jump = jumpPower,
+			infiniteJump = infiniteJumpEnabled
+		})
+	end)
+end
+
+local function loadSettings()
+	local success, data = pcall(function()
+		return settingsStore:GetAsync(player.UserId)
+	end)
+	if success and data then
+		walkSpeed = data.speed or DEFAULT_SPEED
+		jumpPower = data.jump or DEFAULT_JUMP
+		infiniteJumpEnabled = data.infiniteJump or DEFAULT_INFINITE_JUMP
+	end
+	humanoid.WalkSpeed = walkSpeed
+	humanoid.JumpPower = jumpPower
+	speedLabel.Text = "Speed: "..walkSpeed
+	jumpLabel.Text = "Jump Power: "..jumpPower
+	jumpBtn.Text = "Infinite Jump: "..(infiniteJumpEnabled and "ON" or "OFF")
+	jumpBtn.BackgroundColor3 = infiniteJumpEnabled and Color3.fromRGB(0,170,0) or Color3.fromRGB(170,0,0)
+end
+loadSettings()
 
 -- Update Player List
 local function updatePlayerList()
 	playerListFrame:ClearAllChildren()
+	local playerTable = {}
 	for _, p in pairs(Players:GetPlayers()) do
-		if p ~= player then
-			local btn = Instance.new("TextButton")
-			btn.Size = UDim2.new(1,0,0,25)
-			btn.Text = p.Name
-			btn.BackgroundColor3 = Color3.fromRGB(60,60,60)
-			btn.TextColor3 = Color3.new(1,1,1)
-			btn.Parent = playerListFrame
-			Instance.new("UICorner",btn).CornerRadius = UDim.new(0,6)
-
-			btn.MouseButton1Click:Connect(function()
-				if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-					rootPart.CFrame = p.Character.HumanoidRootPart.CFrame + Vector3.new(0,3,0)
-				end
-			end)
+		if p ~= player and (searchText == "" or p.Name:lower():find(searchText:lower())) then
+			table.insert(playerTable,p)
 		end
+	end
+	table.sort(playerTable,function(a,b) return a.Name:lower() < b.Name:lower() end)
+	for _, p in ipairs(playerTable) do
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(1,0,0,25)
+		btn.Text = p.Name
+		btn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+		btn.TextColor3 = Color3.new(1,1,1)
+		btn.Parent = playerListFrame
+		Instance.new("UICorner",btn).CornerRadius = UDim.new(0,6)
+
+		btn.MouseButton1Click:Connect(function()
+			if selectedPlayerBtn then
+				selectedPlayerBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+			end
+			selectedPlayerBtn = btn
+			btn.BackgroundColor3 = Color3.fromRGB(0,170,0)
+			if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+				rootPart.CFrame = p.Character.HumanoidRootPart.CFrame + Vector3.new(0,3,0)
+			end
+		end)
 	end
 	playerListFrame.CanvasSize = UDim2.new(0,0,listLayout.AbsoluteContentSize.Y,0)
 end
-
+searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+	searchText = searchBox.Text
+	updatePlayerList()
+end)
 Players.PlayerAdded:Connect(updatePlayerList)
 Players.PlayerRemoving:Connect(updatePlayerList)
 updatePlayerList()
 
--- Button functions
-
--- Toggle Infinite Jump
+-- Button actions (same as v4, saving settings)
 jumpBtn.MouseButton1Click:Connect(function()
 	infiniteJumpEnabled = not infiniteJumpEnabled
 	jumpBtn.Text = "Infinite Jump: "..(infiniteJumpEnabled and "ON" or "OFF")
 	jumpBtn.BackgroundColor3 = infiniteJumpEnabled and Color3.fromRGB(0,170,0) or Color3.fromRGB(170,0,0)
+	saveSettings()
 end)
-
--- Infinite jump listener
 UIS.JumpRequest:Connect(function()
 	if infiniteJumpEnabled then
 		humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
 	end
 end)
-
--- Increase Speed
-increaseBtn.MouseButton1Click:Connect(function()
+increaseSpeedBtn.MouseButton1Click:Connect(function()
 	walkSpeed = walkSpeed + 10
 	humanoid.WalkSpeed = walkSpeed
 	speedLabel.Text = "Speed: "..walkSpeed
-	increaseBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
+	increaseSpeedBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
 	wait(0.2)
-	increaseBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
+	increaseSpeedBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
+	saveSettings()
 end)
-
--- Decrease Speed
-decreaseBtn.MouseButton1Click:Connect(function()
+decreaseSpeedBtn.MouseButton1Click:Connect(function()
 	walkSpeed = math.max(16, walkSpeed - 10)
 	humanoid.WalkSpeed = walkSpeed
 	speedLabel.Text = "Speed: "..walkSpeed
-	decreaseBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
+	decreaseSpeedBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
 	wait(0.2)
-	decreaseBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
+	decreaseSpeedBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
+	saveSettings()
+end)
+increaseJumpBtn.MouseButton1Click:Connect(function()
+	jumpPower = jumpPower + 10
+	humanoid.JumpPower = jumpPower
+	jumpLabel.Text = "Jump Power: "..jumpPower
+	increaseJumpBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
+	wait(0.2)
+	increaseJumpBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
+	saveSettings()
+end)
+decreaseJumpBtn.MouseButton1Click:Connect(function()
+	jumpPower = math.max(50, jumpPower - 10)
+	humanoid.JumpPower = jumpPower
+	jumpLabel.Text = "Jump Power: "..jumpPower
+	decreaseJumpBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
+	wait(0.2)
+	decreaseJumpBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
+	saveSettings()
+end)
+resetBtn.MouseButton1Click:Connect(function()
+	infiniteJumpEnabled = false
+	jumpBtn.Text = "Infinite Jump: OFF"
+	jumpBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
+	walkSpeed = DEFAULT_SPEED
+	humanoid.WalkSpeed = walkSpeed
+	speedLabel.Text = "Speed: "..walkSpeed
+	jumpPower = DEFAULT_JUMP
+	humanoid.JumpPower = jumpPower
+	jumpLabel.Text = "Jump Power: "..jumpPower
+	if selectedPlayerBtn then
+		selectedPlayerBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+		selectedPlayerBtn = nil
+	end
+	increaseSpeedBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
+	decreaseSpeedBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
+	increaseJumpBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
+	decreaseJumpBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
+	saveSettings()
 end)
 
--- Floating open button
-openBtn.MouseButton1Click:Connect(function()
-	frame.Visible = not frame.Visible
+-- Animated open/close
+handleBtn.MouseButton1Click:Connect(function()
+	menuOpen = not menuOpen
+	local targetPos = menuOpen and UDim2.new(0,60,0.4,-275) or UDim2.new(-1,0,0.4,-275)
+	local tween = TweenService:Create(frame,TweenInfo.new(0.3,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Position=targetPos})
+	tween:Play()
 end)
