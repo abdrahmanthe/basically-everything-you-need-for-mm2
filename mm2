@@ -1,30 +1,20 @@
--- Ultimate Player Control UI v5 😎 (Animated Menu + Auto-Save)
+-- Ultimate Pro UI v5 Fixed & Optimized 😎
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local DataStoreService = game:GetService("DataStoreService")
+local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
--- DataStore for settings
+-- DataStore (Auto-Save)
 local settingsStore = DataStoreService:GetDataStore("UltimateProUI_Settings")
 
--- Default stats
+-- Defaults
 local DEFAULT_SPEED = 16
 local DEFAULT_JUMP = 50
 local DEFAULT_INFINITE_JUMP = false
 
--- Wait for character
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
-local rootPart = character:WaitForChild("HumanoidRootPart")
-
-player.CharacterAdded:Connect(function(char)
-	character = char
-	humanoid = char:WaitForChild("Humanoid")
-	rootPart = char:WaitForChild("HumanoidRootPart")
-end)
-
--- STATES
+-- States
 local infiniteJumpEnabled = DEFAULT_INFINITE_JUMP
 local walkSpeed = DEFAULT_SPEED
 local jumpPower = DEFAULT_JUMP
@@ -32,10 +22,26 @@ local searchText = ""
 local selectedPlayerBtn = nil
 local menuOpen = false
 
+-- Character references
+local function getCharacter()
+	local char = player.Character or player.CharacterAdded:Wait()
+	local hum = char:WaitForChild("Humanoid")
+	local root = char:WaitForChild("HumanoidRootPart")
+	return char, hum, root
+end
+
+local character, humanoid, rootPart = getCharacter()
+player.CharacterAdded:Connect(function(char)
+	character = char
+	humanoid = char:WaitForChild("Humanoid")
+	rootPart = char:WaitForChild("HumanoidRootPart")
+end)
+
 -- GUI
 local gui = Instance.new("ScreenGui")
-gui.Name = "UltimateProUIv5"
+gui.Name = "UltimateProUIv5_Fixed"
 gui.Parent = player:WaitForChild("PlayerGui")
+gui.IgnoreGuiInset = true
 
 -- Floating handle
 local handleBtn = Instance.new("TextButton")
@@ -48,17 +54,17 @@ handleBtn.TextColor3 = Color3.new(1,1,1)
 handleBtn.Parent = gui
 handleBtn.Active = true
 handleBtn.Draggable = true
-Instance.new("UICorner",handleBtn).CornerRadius = UDim.new(1,0)
+Instance.new("UICorner", handleBtn).CornerRadius = UDim.new(1,0)
 
--- Main frame (starts hidden offscreen)
+-- Main frame
 local frame = Instance.new("Frame")
 frame.Size = UDim2.new(0,300,0,550)
-frame.Position = UDim2.new(-1,0,0.4,-275) -- start offscreen
+frame.Position = UDim2.new(-1,0,0.4,-275)
 frame.BackgroundColor3 = Color3.fromRGB(35,35,35)
 frame.Parent = gui
 frame.Active = true
 frame.Draggable = true
-Instance.new("UICorner",frame)
+Instance.new("UICorner", frame)
 
 -- Title
 local title = Instance.new("TextLabel")
@@ -70,13 +76,12 @@ title.Font = Enum.Font.GothamBold
 title.TextSize = 16
 title.Parent = frame
 
--- Speed & Jump indicators
+-- Indicators
 local speedLabel = Instance.new("TextLabel")
 speedLabel.Size = UDim2.new(0.5,0,0,25)
 speedLabel.Position = UDim2.new(0.25,0,0,35)
-speedLabel.Text = "Speed: "..walkSpeed
-speedLabel.TextColor3 = Color3.fromRGB(255,255,255)
 speedLabel.BackgroundTransparency = 1
+speedLabel.TextColor3 = Color3.fromRGB(255,255,255)
 speedLabel.Font = Enum.Font.Gotham
 speedLabel.TextSize = 14
 speedLabel.Parent = frame
@@ -84,14 +89,13 @@ speedLabel.Parent = frame
 local jumpLabel = Instance.new("TextLabel")
 jumpLabel.Size = UDim2.new(0.5,0,0,25)
 jumpLabel.Position = UDim2.new(0.25,0,0,60)
-jumpLabel.Text = "Jump Power: "..jumpPower
-jumpLabel.TextColor3 = Color3.fromRGB(255,255,255)
 jumpLabel.BackgroundTransparency = 1
+jumpLabel.TextColor3 = Color3.fromRGB(255,255,255)
 jumpLabel.Font = Enum.Font.Gotham
 jumpLabel.TextSize = 14
 jumpLabel.Parent = frame
 
--- Helper for buttons
+-- Helper: create button
 local function createButton(name,posY)
 	local btn = Instance.new("TextButton")
 	btn.Size = UDim2.new(0.8,0,0,30)
@@ -100,7 +104,7 @@ local function createButton(name,posY)
 	btn.BackgroundColor3 = Color3.fromRGB(170,0,0)
 	btn.TextColor3 = Color3.new(1,1,1)
 	btn.Parent = frame
-	Instance.new("UICorner",btn).CornerRadius = UDim.new(0,6)
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0,6)
 	return btn
 end
 
@@ -123,7 +127,6 @@ teleportTitle.Font = Enum.Font.Gotham
 teleportTitle.TextSize = 14
 teleportTitle.Parent = frame
 
--- Search box
 local searchBox = Instance.new("TextBox")
 searchBox.Size = UDim2.new(0.8,0,0,25)
 searchBox.Position = UDim2.new(0.1,0,0,350)
@@ -135,12 +138,10 @@ searchBox.BackgroundColor3 = Color3.fromRGB(60,60,60)
 searchBox.Parent = frame
 Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0,6)
 
--- Player list container
 local playerListFrame = Instance.new("ScrollingFrame")
 playerListFrame.Size = UDim2.new(0.8,0,0,170)
 playerListFrame.Position = UDim2.new(0.1,0,0,380)
 playerListFrame.BackgroundTransparency = 1
-playerListFrame.CanvasSize = UDim2.new(0,0,0,0)
 playerListFrame.ScrollBarThickness = 6
 playerListFrame.Parent = frame
 
@@ -148,14 +149,10 @@ local listLayout = Instance.new("UIListLayout")
 listLayout.Parent = playerListFrame
 listLayout.Padding = UDim.new(0,4)
 
--- Save & Load functions (same as v4)
+-- Save & Load
 local function saveSettings()
 	pcall(function()
-		settingsStore:SetAsync(player.UserId, {
-			speed = walkSpeed,
-			jump = jumpPower,
-			infiniteJump = infiniteJumpEnabled
-		})
+		settingsStore:SetAsync(player.UserId, {speed=walkSpeed, jump=jumpPower, infiniteJump=infiniteJumpEnabled})
 	end)
 end
 
@@ -194,21 +191,23 @@ local function updatePlayerList()
 		btn.BackgroundColor3 = Color3.fromRGB(60,60,60)
 		btn.TextColor3 = Color3.new(1,1,1)
 		btn.Parent = playerListFrame
-		Instance.new("UICorner",btn).CornerRadius = UDim.new(0,6)
-
+		Instance.new("UICorner", btn).CornerRadius = UDim.new(0,6)
 		btn.MouseButton1Click:Connect(function()
 			if selectedPlayerBtn then
 				selectedPlayerBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)
 			end
 			selectedPlayerBtn = btn
 			btn.BackgroundColor3 = Color3.fromRGB(0,170,0)
-			if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-				rootPart.CFrame = p.Character.HumanoidRootPart.CFrame + Vector3.new(0,3,0)
+			local char = p.Character
+			if char and char:FindFirstChild("HumanoidRootPart") and rootPart then
+				rootPart.CFrame = char.HumanoidRootPart.CFrame + Vector3.new(0,3,0)
 			end
 		end)
 	end
+	task.wait() -- ensure layout updated
 	playerListFrame.CanvasSize = UDim2.new(0,0,listLayout.AbsoluteContentSize.Y,0)
 end
+
 searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 	searchText = searchBox.Text
 	updatePlayerList()
@@ -217,7 +216,12 @@ Players.PlayerAdded:Connect(updatePlayerList)
 Players.PlayerRemoving:Connect(updatePlayerList)
 updatePlayerList()
 
--- Button actions (same as v4, saving settings)
+-- Button actions with Tween feedback
+local function tweenButtonColor(btn,color)
+	local tween = TweenService:Create(btn,TweenInfo.new(0.2),{BackgroundColor3=color})
+	tween:Play()
+end
+
 jumpBtn.MouseButton1Click:Connect(function()
 	infiniteJumpEnabled = not infiniteJumpEnabled
 	jumpBtn.Text = "Infinite Jump: "..(infiniteJumpEnabled and "ON" or "OFF")
@@ -225,71 +229,76 @@ jumpBtn.MouseButton1Click:Connect(function()
 	saveSettings()
 end)
 UIS.JumpRequest:Connect(function()
-	if infiniteJumpEnabled then
+	if infiniteJumpEnabled and humanoid then
 		humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
 	end
 end)
+
 increaseSpeedBtn.MouseButton1Click:Connect(function()
 	walkSpeed = walkSpeed + 10
-	humanoid.WalkSpeed = walkSpeed
+	if humanoid then humanoid.WalkSpeed = walkSpeed end
 	speedLabel.Text = "Speed: "..walkSpeed
-	increaseSpeedBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
-	wait(0.2)
-	increaseSpeedBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
+	tweenButtonColor(increaseSpeedBtn, Color3.fromRGB(0,170,0))
+	task.wait(0.2)
+	tweenButtonColor(increaseSpeedBtn, Color3.fromRGB(170,0,0))
 	saveSettings()
 end)
+
 decreaseSpeedBtn.MouseButton1Click:Connect(function()
 	walkSpeed = math.max(16, walkSpeed - 10)
-	humanoid.WalkSpeed = walkSpeed
+	if humanoid then humanoid.WalkSpeed = walkSpeed end
 	speedLabel.Text = "Speed: "..walkSpeed
-	decreaseSpeedBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
-	wait(0.2)
-	decreaseSpeedBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
+	tweenButtonColor(decreaseSpeedBtn, Color3.fromRGB(0,170,0))
+	task.wait(0.2)
+	tweenButtonColor(decreaseSpeedBtn, Color3.fromRGB(170,0,0))
 	saveSettings()
 end)
+
 increaseJumpBtn.MouseButton1Click:Connect(function()
 	jumpPower = jumpPower + 10
-	humanoid.JumpPower = jumpPower
+	if humanoid then humanoid.JumpPower = jumpPower end
 	jumpLabel.Text = "Jump Power: "..jumpPower
-	increaseJumpBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
-	wait(0.2)
-	increaseJumpBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
+	tweenButtonColor(increaseJumpBtn, Color3.fromRGB(0,170,0))
+	task.wait(0.2)
+	tweenButtonColor(increaseJumpBtn, Color3.fromRGB(170,0,0))
 	saveSettings()
 end)
+
 decreaseJumpBtn.MouseButton1Click:Connect(function()
 	jumpPower = math.max(50, jumpPower - 10)
-	humanoid.JumpPower = jumpPower
+	if humanoid then humanoid.JumpPower = jumpPower end
 	jumpLabel.Text = "Jump Power: "..jumpPower
-	decreaseJumpBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
-	wait(0.2)
-	decreaseJumpBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
+	tweenButtonColor(decreaseJumpBtn, Color3.fromRGB(0,170,0))
+	task.wait(0.2)
+	tweenButtonColor(decreaseJumpBtn, Color3.fromRGB(170,0,0))
 	saveSettings()
 end)
+
 resetBtn.MouseButton1Click:Connect(function()
 	infiniteJumpEnabled = false
 	jumpBtn.Text = "Infinite Jump: OFF"
 	jumpBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
 	walkSpeed = DEFAULT_SPEED
-	humanoid.WalkSpeed = walkSpeed
+	if humanoid then humanoid.WalkSpeed = walkSpeed end
 	speedLabel.Text = "Speed: "..walkSpeed
 	jumpPower = DEFAULT_JUMP
-	humanoid.JumpPower = jumpPower
+	if humanoid then humanoid.JumpPower = jumpPower end
 	jumpLabel.Text = "Jump Power: "..jumpPower
 	if selectedPlayerBtn then
 		selectedPlayerBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)
 		selectedPlayerBtn = nil
 	end
-	increaseSpeedBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
-	decreaseSpeedBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
-	increaseJumpBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
-	decreaseJumpBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
+	tweenButtonColor(increaseSpeedBtn, Color3.fromRGB(170,0,0))
+	tweenButtonColor(decreaseSpeedBtn, Color3.fromRGB(170,0,0))
+	tweenButtonColor(increaseJumpBtn, Color3.fromRGB(170,0,0))
+	tweenButtonColor(decreaseJumpBtn, Color3.fromRGB(170,0,0))
 	saveSettings()
 end)
 
--- Animated open/close
+-- Animated menu
 handleBtn.MouseButton1Click:Connect(function()
 	menuOpen = not menuOpen
 	local targetPos = menuOpen and UDim2.new(0,60,0.4,-275) or UDim2.new(-1,0,0.4,-275)
-	local tween = TweenService:Create(frame,TweenInfo.new(0.3,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Position=targetPos})
+	local tween = TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position=targetPos})
 	tween:Play()
 end)
